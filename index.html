@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#050505" />
+  <title>Daxi Teleprompter</title>
+  <style>
+    :root {
+      --bg: #050505;
+      --panel: rgba(16,16,16,.92);
+      --panel-2: rgba(24,24,24,.96);
+      --text: #f5f5f5;
+      --muted: #8e8e93;
+      --line: rgba(255,255,255,.09);
+      --accent: #ffffff;
+      --font-size: 54px;
+      --reading-width: 980px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      overscroll-behavior: none;
+    }
+
+    body {
+      min-height: 100dvh;
+      overflow: hidden;
+    }
+
+    button, select, input { font: inherit; }
+
+    button {
+      color: var(--text);
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .app {
+      min-height: 100dvh;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      background: var(--bg);
+    }
+
+    .topbar {
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: max(12px, env(safe-area-inset-top)) 16px 12px;
+      background: linear-gradient(to bottom, rgba(5,5,5,.98), rgba(5,5,5,.86), transparent);
+    }
+
+    .brand {
+      flex: 0 0 auto;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: #fff;
+      opacity: .9;
+    }
+
+    .script-select {
+      min-width: 0;
+      flex: 1;
+      height: 42px;
+      padding: 0 38px 0 14px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #111;
+      color: #fff;
+      outline: none;
+      appearance: none;
+      background-image:
+        linear-gradient(45deg, transparent 50%, #777 50%),
+        linear-gradient(135deg, #777 50%, transparent 50%);
+      background-position:
+        calc(100% - 18px) 18px,
+        calc(100% - 13px) 18px;
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
+      text-overflow: ellipsis;
+    }
+
+    .ghost-btn {
+      flex: 0 0 auto;
+      height: 42px;
+      min-width: 42px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #111;
+      color: #d7d7d7;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .ghost-btn.active {
+      background: #fff;
+      color: #050505;
+      border-color: #fff;
+    }
+
+    .stage {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .stage::before,
+    .stage::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      z-index: 8;
+      pointer-events: none;
+      height: 19%;
+    }
+
+    .stage::before {
+      top: 0;
+      background: linear-gradient(to bottom, #050505 2%, rgba(5,5,5,.92) 34%, transparent 100%);
+    }
+
+    .stage::after {
+      bottom: 0;
+      background: linear-gradient(to top, #050505 2%, rgba(5,5,5,.92) 34%, transparent 100%);
+    }
+
+    .guide {
+      position: absolute;
+      z-index: 9;
+      left: 50%;
+      top: 50%;
+      width: min(calc(100% - 42px), var(--reading-width));
+      transform: translate(-50%, -50%);
+      border-top: 1px solid rgba(255,255,255,.10);
+      border-bottom: 1px solid rgba(255,255,255,.10);
+      height: calc(var(--font-size) * 1.55);
+      pointer-events: none;
+      opacity: .7;
+    }
+
+    .scroller {
+      position: absolute;
+      inset: 0;
+      overflow-y: auto;
+      scrollbar-width: none;
+      scroll-behavior: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .scroller::-webkit-scrollbar { display: none; }
+
+    .teleprompter {
+      width: min(calc(100% - 42px), var(--reading-width));
+      margin: 0 auto;
+      padding: 42vh 0 46vh;
+      font-size: var(--font-size);
+      line-height: 1.38;
+      font-weight: 620;
+      letter-spacing: -.025em;
+      text-align: left;
+      transform-origin: center center;
+      transition: transform .18s ease;
+    }
+
+    .teleprompter.mirrored {
+      transform: scaleX(-1);
+    }
+
+    .teleprompter p {
+      margin: 0 0 1.15em;
+      white-space: pre-wrap;
+    }
+
+    .teleprompter p:last-child { margin-bottom: 0; }
+
+    .controls-wrap {
+      z-index: 20;
+      padding: 10px 14px max(12px, env(safe-area-inset-bottom));
+      background: linear-gradient(to top, rgba(5,5,5,1), rgba(5,5,5,.96), rgba(5,5,5,.72));
+    }
+
+    .controls {
+      max-width: 980px;
+      margin: 0 auto;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border-radius: 18px;
+      padding: 10px;
+      display: grid;
+      grid-template-columns: auto 1fr auto auto auto;
+      gap: 8px;
+      align-items: center;
+      box-shadow: 0 18px 40px rgba(0,0,0,.38);
+    }
+
+    .play {
+      height: 48px;
+      min-width: 112px;
+      padding: 0 18px;
+      border-radius: 12px;
+      background: #fff;
+      color: #050505;
+      font-weight: 800;
+      letter-spacing: -.01em;
+    }
+
+    .range-wrap {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 10px;
+      height: 48px;
+      padding: 0 12px;
+      border-radius: 12px;
+      background: #111;
+    }
+
+    .range-wrap span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: #fff;
+    }
+
+    .ctrl {
+      height: 48px;
+      min-width: 48px;
+      padding: 0 14px;
+      border-radius: 12px;
+      background: #111;
+      border: 1px solid var(--line);
+      color: #efefef;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .ctrl.active {
+      background: #fff;
+      color: #050505;
+      border-color: #fff;
+    }
+
+    .hint {
+      display: none;
+      color: var(--muted);
+      font-size: 11px;
+      text-align: center;
+      padding-top: 8px;
+    }
+
+    body.controls-hidden .topbar,
+    body.controls-hidden .controls-wrap {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    body.controls-hidden .guide {
+      opacity: .32;
+    }
+
+    @media (max-width: 760px) {
+      :root { --font-size: 42px; }
+      .brand { display: none; }
+      .topbar { padding-left: 12px; padding-right: 12px; }
+      .ghost-btn { padding: 0 10px; }
+      .controls {
+        grid-template-columns: 1fr auto auto auto;
+      }
+      .range-wrap {
+        grid-column: 1 / -1;
+        grid-row: 2;
+      }
+      .play { min-width: 0; width: 100%; }
+      .teleprompter {
+        width: calc(100% - 28px);
+        padding-top: 40vh;
+        padding-bottom: 48vh;
+        line-height: 1.34;
+      }
+      .guide { width: calc(100% - 28px); }
+      .hint { display: block; }
+    }
+
+    @media (max-width: 420px) {
+      .ghost-btn.fullscreen { display: none; }
+      .controls { grid-template-columns: 1fr auto auto; }
+      .ctrl.fs { display: none; }
+      .teleprompter { font-weight: 600; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand">Daxi · суфлёр</div>
+      <select id="scriptSelect" class="script-select" aria-label="Выбрать сценарий"></select>
+      <button id="hideUiBtn" class="ghost-btn" type="button">Скрыть</button>
+      <button id="fullscreenTopBtn" class="ghost-btn fullscreen" type="button">⛶</button>
+    </header>
+
+    <section class="stage" id="stage">
+      <div class="guide" aria-hidden="true"></div>
+      <div class="scroller" id="scroller">
+        <article class="teleprompter" id="teleprompter"></article>
+      </div>
+    </section>
+
+    <footer class="controls-wrap">
+      <div class="controls">
+        <button id="playBtn" class="play" type="button">Старт</button>
+
+        <label class="range-wrap">
+          <span>Скорость</span>
+          <input id="speedRange" type="range" min="8" max="120" value="38" step="1" />
+          <span id="speedValue">38</span>
+        </label>
+
+        <button id="smallerBtn" class="ctrl" type="button" aria-label="Уменьшить текст">A−</button>
+        <button id="biggerBtn" class="ctrl" type="button" aria-label="Увеличить текст">A+</button>
+        <button id="mirrorBtn" class="ctrl" type="button">↔</button>
+      </div>
+      <div class="hint">тап по тексту — старт / пауза · двойной тап — скрыть интерфейс</div>
+    </footer>
+  </main>
+
+  <script>
+    const scripts = [
+      {
+        title: "Ролик 1 · Выкуп машины",
+        paragraphs: [
+          "Этот парень через [N] месяцев заберёт эту машину себе. Досмотри, покажу, сколько ему осталось.",
+          "Я [имя], основатель Daxi. Машину Daxi можно выкупить в рассрочку. Банк для этого не нужен.",
+          "Работает так. Подписываем договор, водитель садится на машину и работает через Яндекс, Bolt или Letz.",
+          "Часть заработка идёт в счёт машины. Считается от того, что он реально заработал.",
+          "Сломалась, ремонт в нашем сервисе. Документы на нас.",
+          "Меня часто спрашивают, что будет, если уйти раньше. Отвечаю честно: [правило Daxi].",
+          "А теперь обещанное. [Имя], сколько тебе осталось?",
+          "Какие машины сейчас есть под выкуп, смотри в приложении. Ссылка в профиле."
+        ]
+      },
+      {
+        title: "Ролик 2 · Своя машина. Работа вечерами",
+        paragraphs: [
+          "18:00. Рабочий день закончился. Начинается второй.",
+          "В конце покажу, сколько вышло за этот вечер.",
+          "Я [имя], основатель Daxi. Если у тебя есть машина, на ней можно работать в такси вечерами, по выходным или полный день. Решаешь ты.",
+          "Документы, лицензию и кассу делаем мы, обычно за 5-10 рабочих дней. Без оформления работать опасно, за это снимают номера.",
+          "Заказы приходят из Яндекса, Bolt и Letz. Вышел на три часа, процент парку считается с этих трёх часов.",
+          "Сломалась машина, чиним в своём сервисе, для наших водителей дешевле.",
+          "Обещанный итог вечера.",
+          "Пришли модель и год машины, скажем, подходит ли. Ссылка в профиле."
+        ]
+      },
+      {
+        title: "Ролик 3 · Переход из другого парка",
+        paragraphs: [
+          "Открой приложение своего парка и найди, сколько ты отдал за прошлую неделю. Нашёл? Теперь смотри.",
+          "Я [имя], основатель Daxi. У нас парк берёт процент с того, что ты заработал. Чем больше заказов, тем ниже процент.",
+          "День без заказов стоит ноль. Заболел, уехал, отдыхаешь, ты ничего не должен.",
+          "Каждая поездка и каждое списание видны в нашем приложении.",
+          "Главный страх при переходе: неделя без работы. Рассказываю, как это у нас.",
+          "День первый: заявка в приложении. Дальше [N] дней документы и подключение, это делает менеджер. Потом первая смена.",
+          "Сломалась машина, свой сервис. Вопрос ночью, поддержка круглосуточно.",
+          "Пришли скрин своей недели, посчитаем, как было бы у нас. Приведёшь друга со своей машиной, получишь 2 000 лей."
+        ]
+      },
+      {
+        title: "Для новичка",
+        paragraphs: [
+          "«Ни дня не работал в такси и хочешь попробовать? Вот что будет в первую неделю.»",
+          "Я [имя], основатель Daxi. Шаг первый: сертификат профпригодности. Учёба и экзамен, около двух недель.",
+          "Шаг второй: справка от нарколога и медкомиссия. Адреса и что взять с собой, подскажем.",
+          "Шаг третий: машина. Есть своя, оформим её за 5-10 рабочих дней. Нет своей, даём нашу, и её можно выкупить из заработка.",
+          "Шаг четвёртый: регистрация в нашем приложении. Менеджер проверит документы и подключит тебя к Яндексу, Bolt и Letz.",
+          "Дальше самое волнительное, первая смена. Город знать наизусть не нужно, навигатор ведёт до двери. Поддержка на связи круглосуточно.",
+          "Работаешь, когда хочешь. Парк берёт процент с того, что ты заработал.",
+          "Теперь условие. Стаж вождения от трёх лет. Если права свежие, сохрани видео и возвращайся, когда будет три года.",
+          "Всё остальное поможем сделать. Ссылка в профиле."
+        ]
+      },
+      {
+        title: "Для человека со своей машиной",
+        paragraphs: [
+          "«Твоя машина стоит у подъезда весь вечер. Сейчас покажу, как она может работать на тебя пару часов в день.»",
+          "В конце покажу, сколько вышло за этот вечер.",
+          "Я [имя], основатель Daxi. Если у тебя есть машина, на ней можно работать в такси вечерами, по выходным или полный день. Решаешь ты.",
+          "Документы, лицензию и кассу делаем мы, обычно за 5-10 рабочих дней. ",
+          "Заказы приходят из Яндекса, Bolt и Letz. Вышел на три часа, процент парку считается с этих трёх часов.",
+          "Сломалась машина, чиним в своём сервисе, для наших водителей дешевле.",
+          "Обещанный итог вечера.",
+          "Пришли модель и год машины, скажем, примерные цифры которые вас причтно удивят. Ссылка в профиле."
+        ]
+      },
+      {
+        title: "Для уже работающего таксиста",
+        paragraphs: [
+          "«Что происходит в первую неделю после перехода в другой парк. Показываю по дням.»",
+          "Я [имя], основатель Daxi. Мы - одни из самых продвинутых таксопарков кишинева на данный момент со своей большой экосистемой сервисов. ",
+          "У нас парк берёт процент с того, что ты заработал. Чем больше заказов, тем ниже процент.",
+          "День без заказов стоит ноль. Заболел, уехал, отдыхаешь, ты ничего не должен.",
+          "Каждая поездка и каждое списание видны в нашем приложении.",
+          "Главный страх при переходе: неделя без работы. Рассказываю, как это у нас.",
+          "День первый: заявка в приложении. Дальше [N] дней документы и подключение, это делает менеджер. Потом первая смена.",
+          "Сломалась машина, свой сервис. Вопрос ночью, поддержка круглосуточно.",
+          "Пришли скрин своей недели, посчитаем, как было бы у нас. Приведёшь друга со своей машиной, получишь 2 000 лей."
+        ]
+      },
+      {
+        title: "Вариант 1",
+        paragraphs: [
+          "«Работаешь или работал в такси? Вот что происходит в первую неделю работы. »",
+          "«Главный страх: неделя без работы. Рассказываю, как это у нас.»",
+          "«День первый: заявка в приложении. Дальше [N] дней документы и подключение, это делает менеджер. Потом первая смена.»",
+          "«Сломалась машина, свой сервис. Вопрос ночью, поддержка круглосуточно.»",
+          "«Регистрируйся в нашем приложении и получай ответ персонального менеджера с твоим потенциалом\n\n. Приведёшь друга со своей машиной, получишь 2 000 лей.»"
+        ]
+      },
+      {
+        title: "Вариант 3",
+        paragraphs: [
+          "«Работаешь или работал в такси? Вот три причины, из-за которых водители уходят из парков. Третью называют чаще всего.»",
+          "«Я [имя], основатель Daxi. У нас парк берёт процент с того, что ты заработал. Чем больше заказов, тем ниже процент.»",
+          "«День без заказов стоит ноль. Заболел, уехал, отдыхаешь, ты ничего не должен.»",
+          "«Каждая поездка и каждое списание видны в нашем приложении.»"
+        ]
+      },
+      {
+        title: "Вариант 4",
+        paragraphs: [
+          "«Как получить машину, если денег на неё нет и банк отказал. Есть способ, о котором думают немногие.»",
+          "«Я [имя], основатель Daxi. Машину Daxi можно выкупить в рассрочку. Банк для этого не нужен.»",
+          "«Работает так. Подписываем договор, водитель садится на машину и работает через Яндекс, Bolt или Letz.»",
+          "«Часть заработка идёт в счёт машины. Считается от того, что ты реально заработал.»",
+          "«Сломалась, ремонт в нашем сервисе. Документы на нас.»",
+          "«Какие машины сейчас есть под выкуп, смотри в приложении. Ссылка в профиле.»"
+        ]
+      }
+    ];
+
+    const select = document.getElementById("scriptSelect");
+    const teleprompter = document.getElementById("teleprompter");
+    const scroller = document.getElementById("scroller");
+    const playBtn = document.getElementById("playBtn");
+    const speedRange = document.getElementById("speedRange");
+    const speedValue = document.getElementById("speedValue");
+    const smallerBtn = document.getElementById("smallerBtn");
+    const biggerBtn = document.getElementById("biggerBtn");
+    const mirrorBtn = document.getElementById("mirrorBtn");
+    const hideUiBtn = document.getElementById("hideUiBtn");
+    const fullscreenTopBtn = document.getElementById("fullscreenTopBtn");
+    const stage = document.getElementById("stage");
+
+    let playing = false;
+    let raf = null;
+    let last = 0;
+    let speed = Number(speedRange.value);
+    let fontSize = Number(localStorage.getItem("daxiFontSize") || (window.innerWidth <= 760 ? 42 : 54));
+    let mirrored = localStorage.getItem("daxiMirror") === "1";
+    let selected = Number(localStorage.getItem("daxiScript") || 0);
+
+    scripts.forEach((script, index) => {
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.textContent = script.title;
+      select.appendChild(option);
+    });
+
+    if (!scripts[selected]) selected = 0;
+    select.value = String(selected);
+
+    function renderScript(index) {
+      pause();
+      selected = index;
+      localStorage.setItem("daxiScript", String(index));
+      teleprompter.innerHTML = "";
+      scripts[index].paragraphs.forEach(text => {
+        const p = document.createElement("p");
+        p.textContent = text;
+        teleprompter.appendChild(p);
+      });
+      scroller.scrollTop = 0;
+    }
+
+    function setFontSize(next) {
+      fontSize = Math.max(28, Math.min(92, next));
+      document.documentElement.style.setProperty("--font-size", fontSize + "px");
+      localStorage.setItem("daxiFontSize", String(fontSize));
+    }
+
+    function setMirror(value) {
+      mirrored = value;
+      teleprompter.classList.toggle("mirrored", mirrored);
+      mirrorBtn.classList.toggle("active", mirrored);
+      localStorage.setItem("daxiMirror", mirrored ? "1" : "0");
+    }
+
+    function tick(now) {
+      if (!playing) return;
+      if (!last) last = now;
+      const dt = Math.min(40, now - last);
+      last = now;
+      scroller.scrollTop += (speed * dt) / 1000;
+
+      const atEnd = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2;
+      if (atEnd) {
+        pause();
+        return;
+      }
+      raf = requestAnimationFrame(tick);
+    }
+
+    function play() {
+      if (playing) return;
+      playing = true;
+      playBtn.textContent = "Пауза";
+      last = 0;
+      raf = requestAnimationFrame(tick);
+    }
+
+    function pause() {
+      playing = false;
+      playBtn.textContent = "Старт";
+      last = 0;
+      if (raf) cancelAnimationFrame(raf);
+      raf = null;
+    }
+
+    function togglePlay() {
+      playing ? pause() : play();
+    }
+
+    function toggleUi(force) {
+      const hidden = typeof force === "boolean"
+        ? force
+        : !document.body.classList.contains("controls-hidden");
+      document.body.classList.toggle("controls-hidden", hidden);
+      hideUiBtn.textContent = hidden ? "Показать" : "Скрыть";
+    }
+
+    async function toggleFullscreen() {
+      try {
+        if (!document.fullscreenElement) {
+          await document.documentElement.requestFullscreen();
+        } else {
+          await document.exitFullscreen();
+        }
+      } catch (_) {}
+    }
+
+    select.addEventListener("change", () => renderScript(Number(select.value)));
+
+    playBtn.addEventListener("click", togglePlay);
+    stage.addEventListener("click", (event) => {
+      if (event.detail === 1) togglePlay();
+    });
+    stage.addEventListener("dblclick", () => toggleUi());
+
+    speedRange.addEventListener("input", () => {
+      speed = Number(speedRange.value);
+      speedValue.textContent = String(speed);
+      localStorage.setItem("daxiSpeed", String(speed));
+    });
+
+    smallerBtn.addEventListener("click", () => setFontSize(fontSize - 4));
+    biggerBtn.addEventListener("click", () => setFontSize(fontSize + 4));
+    mirrorBtn.addEventListener("click", () => setMirror(!mirrored));
+    hideUiBtn.addEventListener("click", () => toggleUi());
+    fullscreenTopBtn.addEventListener("click", toggleFullscreen);
+
+    document.addEventListener("keydown", (event) => {
+      if (event.code === "Space") {
+        event.preventDefault();
+        togglePlay();
+      } else if (event.key === "ArrowUp") {
+        event.preventDefault();
+        scroller.scrollTop -= 80;
+      } else if (event.key === "ArrowDown") {
+        event.preventDefault();
+        scroller.scrollTop += 80;
+      } else if (event.key === "+" || event.key === "=") {
+        setFontSize(fontSize + 4);
+      } else if (event.key === "-") {
+        setFontSize(fontSize - 4);
+      } else if (event.key.toLowerCase() === "m") {
+        setMirror(!mirrored);
+      } else if (event.key.toLowerCase() === "f") {
+        toggleFullscreen();
+      } else if (event.key === "Escape") {
+        toggleUi(false);
+      }
+    });
+
+    const savedSpeed = Number(localStorage.getItem("daxiSpeed"));
+    if (savedSpeed >= 8 && savedSpeed <= 120) {
+      speed = savedSpeed;
+      speedRange.value = String(savedSpeed);
+      speedValue.textContent = String(savedSpeed);
+    }
+
+    setFontSize(fontSize);
+    setMirror(mirrored);
+    renderScript(selected);
+  </script>
+</body>
+</html>
